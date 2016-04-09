@@ -17,8 +17,10 @@ import BasicPrelude
 import Control.Monad.Trans.Control
 import Data.String.Conversions
 
-import System.GPIO.Internal
+import System.GPIO.Types
 
+
+-- Exported API ----------------------------------------------------------------
 
 initReaderPin :: (MonadBaseControl IO m, MonadIO m) => Pin -> m (ActivePin 'In)
 initReaderPin p = initPin activePin >> return activePin
@@ -55,3 +57,47 @@ closePin :: (MonadBaseControl IO m, MonadIO m) => ActivePin a -> m ()
 closePin p = withVerboseError
     ("Error closing " <> show p <> ". Was this pin already closed?")
     $ liftIO (writeFile unexportPath (pinNumT $ pin p))
+
+
+-- Internal Pin Utils ----------------------------------------------------------
+
+initPin :: (MonadBaseControl IO m, MonadIO m) => ActivePin a -> m ()
+initPin p = do
+    let exportErrorMsg = "Error initializing " <> show p <> ". Was this pin already initialized?"
+        setDirErrorMsg = "Error setting direction for " <> show p <> "."
+    withVerboseError exportErrorMsg export
+    withVerboseError setDirErrorMsg setDirection
+  where
+    export = liftIO $ writeFile exportPath (pinNumT $ pin p)
+    setDirection = liftIO $ writeFile (directionPath $ pin p) (toText dir)
+    dir :: Dir
+    dir = case p of ReaderPin _ -> In
+                    WriterPin _ -> Out
+
+
+withVerboseError :: (MonadBaseControl IO m) => Text -> m () -> m ()
+withVerboseError msg = handle handleError
+  where
+    handleError :: SomeException -> m ()
+    handleError e = error $ convertString (msg <> "\nRaw Error: " <> show e)
+
+
+-- Path Utils ------------------------------------------------------------------
+
+basePath :: FilePath
+basePath = "/sys/class/gpio"
+
+exportPath :: FilePath
+exportPath = basePath <> "/export"
+
+unexportPath :: FilePath
+unexportPath = basePath <> "/unexport"
+
+pinPath :: Pin -> FilePath
+pinPath p = basePath <> "/gpio" <> convertString (pinNumT p)
+
+valuePath :: Pin -> FilePath
+valuePath p = pinPath p <> "/value"
+
+directionPath :: Pin -> FilePath
+directionPath p = pinPath p <> "/direction"

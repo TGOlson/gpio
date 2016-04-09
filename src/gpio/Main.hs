@@ -4,33 +4,32 @@ import BasicPrelude
 import Control.Concurrent
 
 import System.GPIO
-import System.GPIO.Internal
+import System.GPIO.Types
 
--- Test program, hardcoded to only work with pins 18 and 23
 main :: IO ()
 main =
     getArgs >>= \case
-        -- exporting...
-        ["export", "18", "out"] -> void (initWriterPin P18)
-        ["export", "18", "in"]  -> void (initReaderPin P18)
-        ["export", "23", "out"] -> void (initWriterPin P23)
-        ["export", "23", "in"]  -> void (initReaderPin P23)
-        -- unexporting...
-        ["unexport", "18"]      -> closePin (ReaderPin P18)
-        ["unexport", "23"]      -> closePin (ReaderPin P23)
-        -- reading...
-        ["read", "18"]          -> readPin (ReaderPin P18) >>= print
-        ["read", "23"]          -> readPin (ReaderPin P23) >>= print
-        -- writing...
-        ["write", "18", "1"]    -> writePin (WriterPin P18) HI
-        ["write", "18", "0"]    -> writePin (WriterPin P18) LO
-        ["write", "23", "1"]    -> writePin (WriterPin P23) HI
-        ["write", "23", "0"]    -> writePin (WriterPin P23) LO
-        [x]                     -> case (readMay x :: Maybe Int) of
-            Nothing -> error "Illegal usage!"
+        ["export", i, dir] -> case (readMay i >>= fromInt, fromText dir) of
+            (Just p, Right d) -> case d of
+                In  -> void (initReaderPin p)
+                Out -> void (initWriterPin p)
+            _ -> usageError
+        ["unexport", i] -> case readMay i >>= fromInt of
+            -- Note: chose a random pin type when closing the pin - doesn't matter...
+            Just p  -> closePin (ReaderPin p)
+            Nothing -> usageError
+        ["read", i] -> case readMay i >>= fromInt of
+            Nothing -> usageError
+            Just p  -> readPin (ReaderPin p) >>= print
+        ["write", i, val] -> case (readMay i >>= fromInt, fromText val) of
+            (Just p, Right v) -> writePin (WriterPin p) v
+            _                 -> usageError
+        [x] -> case (readMay x :: Maybe Int) of
+            Nothing -> usageError
             Just i  -> runTest i
         _ -> error "Illegal usage!"
   where
+    usageError = error "gpio (init PIN_NUM DIR|close PIN_NUM|read PIN_NUM|write PIN_NUM VALUE|SECONDS)"
     runTest s = do
         putStrLn "In program"
         p <- initWriterPin P18

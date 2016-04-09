@@ -17,18 +17,15 @@ library
   hs-source-dirs:   src/lib
   ghc-options:      -Wall
   default-language: Haskell2010
-  exposed-modules: System.GPIO, System.GPIO.Internal
+  exposed-modules: System.GPIO, System.GPIO.Types
   default-extensions:
       OverloadedStrings NoImplicitPrelude LambdaCase
       StandaloneDeriving FlexibleContexts ScopedTypeVariables
       KindSignatures DataKinds GADTs
   build-depends:
       base,
-      bytestring,
       basic-prelude,
       string-conversions,
-      transformers,
-      mtl,
       monad-control
 
 executable gpio
