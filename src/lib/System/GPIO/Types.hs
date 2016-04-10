@@ -1,4 +1,15 @@
-module System.GPIO.Types where
+module System.GPIO.Types
+    ( Pin(..)
+    , pinNum
+    , pinNumT
+    , fromInt
+    , ActivePin(..)
+    , pin
+    , Dir(..)
+    , Value(..)
+    , fromText
+    , toText
+    ) where
 
 import BasicPrelude
 import Data.String.Conversions

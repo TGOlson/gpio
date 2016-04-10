@@ -26,7 +26,7 @@ initReaderPin :: (MonadBaseControl IO m, MonadIO m) => Pin -> m (ActivePin 'In)
 initReaderPin p = initPin activePin >> return activePin
   where activePin = ReaderPin p
 
-initWriterPin :: Pin -> IO (ActivePin 'Out)
+initWriterPin :: (MonadBaseControl IO m, MonadIO m) => Pin -> m (ActivePin 'Out)
 initWriterPin p = initPin activePin >> return activePin
   where activePin = WriterPin p
 
