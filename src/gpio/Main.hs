@@ -1,50 +1,57 @@
 module Main (main) where
 
 import BasicPrelude
-import Control.Concurrent
+import Data.String.Conversions
+import Options.Generic
 
 import System.GPIO
 import System.GPIO.Types
 
+data InputCommand
+    = Export Int String
+    | Unexport Int
+    | Read Int
+    | Write Int String
+  deriving (Generic, Show)
+
+instance ParseRecord InputCommand
+
+-- optparse-generic has trouble with nested types
+-- so we can't make 'Command' a parse record
+-- Instead we use RawCommand for the generic instance, then
+-- convert to the actual 'Command' type.
+data Command
+    = CmdExport Pin Dir
+    | CmdUnexport Pin
+    | CmdRead Pin
+    | CmdWrite Pin Value
+  deriving (Generic, Show)
+
+
+toCommand :: InputCommand -> Either Text Command
+toCommand =
+    \case Export i "in"  -> (`CmdExport` In)  <$> parsePin i
+          Export i "out" -> (`CmdExport` Out) <$> parsePin i
+          Export _ _     -> Left "Usage error: use 'in' or 'out' for export direction."
+          Unexport i     -> CmdUnexport       <$> parsePin i
+          Read i         -> CmdRead           <$> parsePin i
+          Write i "hi"   -> (`CmdWrite` HI)   <$> parsePin i
+          Write i "lo"   -> (`CmdWrite` LO)   <$> parsePin i
+          Write _ _      -> Left "Usage error: use 'hi' or 'lo' for write value."
+  where
+    parsePin i = case fromInt i of
+        Nothing -> Left ("Usage error: could not parse pin value from integer: " ++ show i)
+        Just p  -> Right p
+
 main :: IO ()
 main =
-    getArgs >>= \case
-        ["export", i, dir] -> case (readMay i >>= fromInt, fromText dir) of
-            (Just p, Right d) -> case d of
-                In  -> void (initReaderPin p)
-                Out -> void (initWriterPin p)
-            _ -> usageError
-        ["unexport", i] -> case readMay i >>= fromInt of
-            -- Note: chose a random pin type when closing the pin - doesn't matter...
-            Just p  -> closePin (ReaderPin p)
-            Nothing -> usageError
-        ["read", i] -> case readMay i >>= fromInt of
-            Nothing -> usageError
-            Just p  -> readPin (ReaderPin p) >>= print
-        ["write", i, val] -> case (readMay i >>= fromInt, fromText val) of
-            (Just p, Right v) -> writePin (WriterPin p) v
-            _                 -> usageError
-        [x] -> case (readMay x :: Maybe Int) of
-            Nothing -> usageError
-            Just i  -> runTest i
-        _ -> error "Illegal usage!"
-  where
-    usageError = error "gpio (init PIN_NUM DIR|close PIN_NUM|read PIN_NUM|write PIN_NUM VALUE|SECONDS)"
-    runTest s = do
-        putStrLn "In program"
-        p <- initWriterPin P18
-
-        putStrLn $ "Got pin: " ++ show p
-        writePin p HI
-
-        putStrLn "Set to HI"
-        v <- readPin p
-        putStrLn $ "Pin value: " <> show v
-
-        threadDelay (1000000 * s)
-        putStrLn "Delay over"
-
-        writePin p LO
-        v' <- readPin p
-        putStrLn $ "New Pin value: " <> show v'
-        closePin p
+    toCommand <$> getRecord "GPIO" >>= \case
+        Left e    -> error (convertString e)
+        Right cmd -> case cmd of
+            CmdExport p In  -> void (initReaderPin p)
+            CmdExport p Out -> void (initWriterPin p)
+            -- Note: chose a random pin type when closing the pin
+            -- the type doesn't actually matter...
+            CmdUnexport p   -> closePin (ReaderPin p)
+            CmdRead p       -> readPin (ReaderPin p) >>= print
+            CmdWrite p v    -> writePin (WriterPin p) v

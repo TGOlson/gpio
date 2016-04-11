@@ -1,5 +1,5 @@
 name:                gpio
-version:             0.1.0.1
+version:             0.1.0.2
 synopsis:            Haskell GPIO interface, designed specifically for the RaspberryPi.
 description:         Please see README.md
 homepage:            http://github.com/tgolson/gpio
@@ -25,8 +25,8 @@ library
   build-depends:
       base >= 4.5 && < 5,
       basic-prelude,
-      string-conversions,
-      monad-control
+      monad-control,
+      string-conversions
 
 executable gpio
   hs-source-dirs:   src/gpio
@@ -36,8 +36,10 @@ executable gpio
   build-depends:
       base >= 4.5 && < 5,
       gpio,
-      basic-prelude
+      basic-prelude,
+      optparse-generic,
+      string-conversions
   default-extensions:
       OverloadedStrings NoImplicitPrelude LambdaCase
       StandaloneDeriving FlexibleContexts ScopedTypeVariables
-      KindSignatures DataKinds GADTs
+      KindSignatures DataKinds GADTs DeriveGeneric
