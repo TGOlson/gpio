@@ -1,0 +1,44 @@
+name:                gpio
+version:             0.1.0.2
+synopsis:            Haskell GPIO interface, designed specifically for the RaspberryPi.
+description:         Please see README.md
+homepage:            http://github.com/tgolson/gpio
+license:             BSD3
+author:              Tyler Olson
+maintainer:          tydotg@gmail.com
+copyright:           2016 Tyler Olson
+category:            Hardware
+extra-source-files:
+  - README.md
+
+ghc-options: -Wall
+
+default-extensions:
+  - DataKinds
+  - DeriveGeneric
+  - FlexibleContexts
+  - FlexibleInstances
+  - GADTs
+  - KindSignatures
+  - LambdaCase
+  - OverloadedStrings
+  - ScopedTypeVariables
+  - StandaloneDeriving
+
+dependencies:
+  - aeson
+  - base >= 4.7 && < 5
+  - monad-control
+  - exceptions
+  - optparse-generic
+
+library:
+  source-dirs: lib
+  exposed-modules:
+    - System.GPIO
+
+executables:
+  gpio:
+    source-dirs: exec
+    main: Main.hs
+    dependencies: gpio

@@ -1,9 +1,12 @@
 module System.GPIO
     -- Re-exported types
     ( Pin(..)
-    , ActivePin
+    -- , ActivePin
     , Value(..)
     , Dir(..)
+    -- Exported for main file... TODO: reevaluate type structure
+    , fromInt
+    , ActivePin(..)
 
     -- Exported API
     , initReaderPin

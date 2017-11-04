@@ -4,7 +4,6 @@ import Control.Monad (void)
 import Options.Generic
 
 import System.GPIO
-import System.GPIO.Types
 
 data InputCommand
     = Export Int String
