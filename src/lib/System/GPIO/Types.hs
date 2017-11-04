@@ -11,9 +11,8 @@ module System.GPIO.Types
     , toText
     ) where
 
-import BasicPrelude
-import Data.String.Conversions
-
+import Data.Maybe (fromMaybe)
+import Data.Monoid ((<>))
 
 -- Core Types ------------------------------------------------------------------
 
@@ -29,14 +28,16 @@ pinNumDict = [ (P18, 18)
 pinNum :: Pin -> Int
 pinNum p = fromMaybe unexpectedError (lookup p pinNumDict)
   where
-    unexpectedError = error $ convertString
-        ("Unexpected error. " ++ show p ++ " not defined in 'pinNumDict'")
+    unexpectedError = error ("Unexpected error. " ++ show p ++ " not defined in 'pinNumDict'")
 
-pinNumT :: Pin -> Text
+pinNumT :: Pin -> String
 pinNumT = show . pinNum
 
 fromInt :: Int -> Maybe Pin
 fromInt i = lookup i (swap <$> pinNumDict)
+
+swap :: (a, b) -> (b, a)
+swap (x, y) = (y, x)
 
 data ActivePin (a :: Dir) where
     ReaderPin :: Pin -> ActivePin 'In
@@ -71,7 +72,7 @@ instance FromText Value where
 -- We are going to do a lot of reading/writing to files w/ custom data types.
 -- Create a small interface to keep conversions consistent.
 class ToText a where
-    toText :: a -> Text
+    toText :: a -> String
 
 class FromText a where
-    fromText :: Text -> Either Text a
+    fromText :: String -> Either String a

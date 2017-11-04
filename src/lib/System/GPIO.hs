@@ -13,32 +13,33 @@ module System.GPIO
     , closePin
     ) where
 
-import BasicPrelude
-import Control.Monad.Trans.Control
-import Data.String.Conversions
+-- import Control.Monad.Trans.Control
+import Control.Exception (SomeException(..))
+import Control.Monad.IO.Class
+import Control.Monad.Catch
+import Data.Monoid ((<>))
 
 import System.GPIO.Types
 
 
 -- Exported API ----------------------------------------------------------------
 
-initReaderPin :: (MonadBaseControl IO m, MonadIO m) => Pin -> m (ActivePin 'In)
+initReaderPin :: (MonadCatch m, MonadIO m) => Pin -> m (ActivePin 'In)
 initReaderPin p = initPin activePin >> return activePin
   where activePin = ReaderPin p
 
-initWriterPin :: (MonadBaseControl IO m, MonadIO m) => Pin -> m (ActivePin 'Out)
+initWriterPin :: (MonadCatch m, MonadIO m) => Pin -> m (ActivePin 'Out)
 initWriterPin p = initPin activePin >> return activePin
   where activePin = WriterPin p
 
-readPin :: (MonadBaseControl IO m, MonadIO m) => ActivePin a -> m Value
+readPin :: (MonadCatch m, MonadIO m) => ActivePin a -> m Value
 readPin p = do
     x <- liftIO $ readFile (valuePath $ pin p)
 
     -- TODO: handle errors after cleaning this up...
     case fromText (runLineHack x) of
         Right v -> return v
-        Left e  -> error $ convertString $
-            "Error reading value file for \"" <> show p <> "\": " <> e
+        Left e  -> error $ "Error reading value file for \"" <> show p <> "\": " <> e
   where
     -- Note: too lazy to properly handle new lines in the value files
     -- it looks like the gpio interface appends newlines
@@ -48,12 +49,12 @@ readPin p = do
         [] -> error "Error: runLineHack failed us."
         (x:_) -> x
 
-writePin :: (MonadBaseControl IO m, MonadIO m) => ActivePin 'Out -> Value -> m ()
+writePin :: (MonadCatch m, MonadIO m) => ActivePin 'Out -> Value -> m ()
 writePin p v = withVerboseError
     ("Error writing value \"" <> show v <> "\" to " <> show p <> ".")
     $ liftIO (writeFile (valuePath $ pin p) (toText v))
 
-closePin :: (MonadBaseControl IO m, MonadIO m) => ActivePin a -> m ()
+closePin :: (MonadCatch m, MonadIO m) => ActivePin a -> m ()
 closePin p = withVerboseError
     ("Error closing " <> show p <> ". Was this pin already closed?")
     $ liftIO (writeFile unexportPath (pinNumT $ pin p))
@@ -61,7 +62,7 @@ closePin p = withVerboseError
 
 -- Internal Pin Utils ----------------------------------------------------------
 
-initPin :: (MonadBaseControl IO m, MonadIO m) => ActivePin a -> m ()
+initPin :: (MonadCatch m, MonadIO m) => ActivePin a -> m ()
 initPin p = do
     let exportErrorMsg = "Error initializing " <> show p <> ". Was this pin already initialized?"
         setDirErrorMsg = "Error setting direction for " <> show p <> "."
@@ -75,11 +76,11 @@ initPin p = do
                     WriterPin _ -> Out
 
 
-withVerboseError :: (MonadBaseControl IO m) => Text -> m () -> m ()
+withVerboseError :: (MonadCatch m) => String -> m () -> m ()
 withVerboseError msg = handle handleError
   where
     handleError :: SomeException -> m ()
-    handleError e = error $ convertString (msg <> "\nRaw Error: " <> show e)
+    handleError e = error $ msg <> "\nRaw Error: " <> show e
 
 
 -- Path Utils ------------------------------------------------------------------
@@ -94,7 +95,7 @@ unexportPath :: FilePath
 unexportPath = basePath <> "/unexport"
 
 pinPath :: Pin -> FilePath
-pinPath p = basePath <> "/gpio" <> convertString (pinNumT p)
+pinPath p = basePath <> "/gpio" <> pinNumT p
 
 valuePath :: Pin -> FilePath
 valuePath p = pinPath p <> "/value"

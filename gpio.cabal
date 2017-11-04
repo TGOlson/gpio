@@ -19,14 +19,13 @@ library
   default-language: Haskell2010
   exposed-modules: System.GPIO, System.GPIO.Types
   default-extensions:
-      OverloadedStrings NoImplicitPrelude LambdaCase
+      OverloadedStrings LambdaCase
       StandaloneDeriving FlexibleContexts ScopedTypeVariables
       KindSignatures DataKinds GADTs
   build-depends:
       base >= 4.5 && < 5,
-      basic-prelude,
       monad-control,
-      string-conversions
+      exceptions
 
 executable gpio
   hs-source-dirs:   src/gpio
@@ -36,10 +35,9 @@ executable gpio
   build-depends:
       base >= 4.5 && < 5,
       gpio,
-      basic-prelude,
       optparse-generic,
       string-conversions
   default-extensions:
-      OverloadedStrings NoImplicitPrelude LambdaCase
+      OverloadedStrings LambdaCase
       StandaloneDeriving FlexibleContexts ScopedTypeVariables
       KindSignatures DataKinds GADTs DeriveGeneric

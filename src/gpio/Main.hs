@@ -1,7 +1,6 @@
 module Main (main) where
 
-import BasicPrelude
-import Data.String.Conversions
+import Control.Monad (void)
 import Options.Generic
 
 import System.GPIO
@@ -28,7 +27,7 @@ data Command
   deriving (Generic, Show)
 
 
-toCommand :: InputCommand -> Either Text Command
+toCommand :: InputCommand -> Either String Command
 toCommand =
     \case Export i "in"  -> (`CmdExport` In)  <$> parsePin i
           Export i "out" -> (`CmdExport` Out) <$> parsePin i
@@ -46,7 +45,7 @@ toCommand =
 main :: IO ()
 main =
     toCommand <$> getRecord "GPIO" >>= \case
-        Left e    -> error (convertString e)
+        Left e    -> error e
         Right cmd -> case cmd of
             CmdExport p In  -> void (initReaderPin p)
             CmdExport p Out -> void (initWriterPin p)
