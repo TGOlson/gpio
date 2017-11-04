@@ -1,92 +1,122 @@
 module System.GPIO
     -- Re-exported types
     ( Pin(..)
-    -- , ActivePin
+    , ActivePin
     , Value(..)
-    , Dir(..)
-    -- Exported for main file... TODO: reevaluate type structure
-    , fromInt
-    , ActivePin(..)
+    , Direction(..)
 
     -- Exported API
     , initReaderPin
     , initWriterPin
     , readPin
     , writePin
+    , reattachToReaderPin
+    , reattachToWriterPin
     , closePin
     ) where
 
--- import Control.Monad.Trans.Control
-import Control.Exception (SomeException(..))
-import Control.Monad.IO.Class
+import Control.Exception      (SomeException (..))
+import Control.Monad
 import Control.Monad.Catch
-import Data.Monoid ((<>))
+import Control.Monad.IO.Class
+import Data.Monoid            ((<>))
+import System.Directory
 
 import System.GPIO.Types
 
 
--- Exported API ----------------------------------------------------------------
-
 initReaderPin :: (MonadCatch m, MonadIO m) => Pin -> m (ActivePin 'In)
-initReaderPin p = initPin activePin >> return activePin
-  where activePin = ReaderPin p
+initReaderPin pin = let activePin = ReaderPin pin
+    in initPin activePin >> return activePin
 
 initWriterPin :: (MonadCatch m, MonadIO m) => Pin -> m (ActivePin 'Out)
-initWriterPin p = initPin activePin >> return activePin
-  where activePin = WriterPin p
+initWriterPin pin = let activePin = WriterPin pin
+    in initPin activePin >> return activePin
+
+initPin :: (MonadCatch m, MonadIO m) => ActivePin a -> m ()
+initPin pin = do
+    withVerboseError (InitPinException (unpin pin)) $
+        writeFileM exportPath (toData $ unpin pin)
+
+    withVerboseError (SetDirectionException (unpin pin) (direction pin)) $
+        writeFileM (directionPath $ unpin pin) (toData (direction pin))
+
 
 readPin :: (MonadCatch m, MonadIO m) => ActivePin a -> m Value
-readPin p = do
-    x <- liftIO $ readFile (valuePath $ pin p)
+readPin pin = do
+    x <- readFileM $ valuePath (unpin pin)
 
     -- TODO: handle errors after cleaning this up...
-    case fromText (runLineHack x) of
+    case fromData (runLineHack x) of
         Right v -> return v
-        Left e  -> error $ "Error reading value file for \"" <> show p <> "\": " <> e
+        Left e  -> throwM $ ReadPinException (unpin pin) e
   where
     -- Note: too lazy to properly handle new lines in the value files
     -- it looks like the gpio interface appends newlines
     -- so file is read as "1\n"
     -- TODO: handle correctly, maybe use hGetChar or something...
     runLineHack t = case lines t of
-        [] -> error "Error: runLineHack failed us."
+        []    -> error "Error: runLineHack failed us."
         (x:_) -> x
 
-writePin :: (MonadCatch m, MonadIO m) => ActivePin 'Out -> Value -> m ()
-writePin p v = withVerboseError
-    ("Error writing value \"" <> show v <> "\" to " <> show p <> ".")
-    $ liftIO (writeFile (valuePath $ pin p) (toText v))
+
+writePin :: (MonadCatch m, MonadIO m) => Value -> ActivePin 'Out -> m ()
+writePin value pin = withVerboseError (WritePinException (unpin pin) value)
+    $ writeFileM (valuePath $ unpin pin) (toData value)
+
+-- Get an active pin from a pin, preserving the invariants required when a pin is initialized.
+-- Useful for CLI type commands where pointers to an active pin can be lost between calls.
+reattachToReaderPin :: (MonadCatch m, MonadIO m) => Pin -> m (ActivePin 'In)
+reattachToReaderPin = reattachToPin . ReaderPin
+
+reattachToWriterPin :: (MonadCatch m, MonadIO m) => Pin -> m (ActivePin 'Out)
+reattachToWriterPin = reattachToPin . WriterPin
+
+reattachToPin :: (MonadCatch m, MonadIO m) => ActivePin a -> m (ActivePin a)
+reattachToPin pin = do
+    let err = ReattachPinException (unpin pin)
+
+    exists <- liftIO $ doesFileExist (directionPath (unpin pin))
+    unless exists $ throwM (err "Pin was never initialized")
+
+    v <- fromData <$> readFileM (directionPath (unpin pin))
+    dir <- either (throwM . err) return v
+
+    unless (dir == direction pin) $ throwM (err "Attempting to reattach to pin in wrong direction")
+
+    return pin
+
 
 closePin :: (MonadCatch m, MonadIO m) => ActivePin a -> m ()
-closePin p = withVerboseError
-    ("Error closing " <> show p <> ". Was this pin already closed?")
-    $ liftIO (writeFile unexportPath (pinNumT $ pin p))
+closePin pin = withVerboseError (ClosePinException (unpin pin))
+    $ writeFileM unexportPath (toData $ unpin pin)
+
+-- Internal --------------------------------------------------------------------------------------------------
+
+data PinException
+    = InitPinException Pin String
+    | SetDirectionException Pin Direction String
+    | ReadPinException Pin String
+    | WritePinException Pin Value String
+    | ReattachPinException Pin String
+    | ClosePinException Pin String
+  deriving (Show)
+
+instance Exception PinException
 
 
--- Internal Pin Utils ----------------------------------------------------------
-
-initPin :: (MonadCatch m, MonadIO m) => ActivePin a -> m ()
-initPin p = do
-    let exportErrorMsg = "Error initializing " <> show p <> ". Was this pin already initialized?"
-        setDirErrorMsg = "Error setting direction for " <> show p <> "."
-    withVerboseError exportErrorMsg export
-    withVerboseError setDirErrorMsg setDirection
-  where
-    export = liftIO $ writeFile exportPath (pinNumT $ pin p)
-    setDirection = liftIO $ writeFile (directionPath $ pin p) (toText dir)
-    dir :: Dir
-    dir = case p of ReaderPin _ -> In
-                    WriterPin _ -> Out
 
 
-withVerboseError :: (MonadCatch m) => String -> m () -> m ()
-withVerboseError msg = handle handleError
-  where
-    handleError :: SomeException -> m ()
-    handleError e = error $ msg <> "\nRaw Error: " <> show e
+withVerboseError :: MonadCatch m => (String -> PinException) -> m () -> m ()
+withVerboseError pinException = handle $ \(e :: SomeException) -> throwM $ pinException (show e)
 
+writeFileM :: MonadIO m => FilePath -> String -> m ()
+writeFileM fp = liftIO . writeFile fp
 
--- Path Utils ------------------------------------------------------------------
+readFileM :: MonadIO m => FilePath -> m String
+readFileM = liftIO . readFile
+
+-- Path Utils ------------------------------------------------------------------------------------------------
 
 basePath :: FilePath
 basePath = "/sys/class/gpio"
@@ -98,10 +128,10 @@ unexportPath :: FilePath
 unexportPath = basePath <> "/unexport"
 
 pinPath :: Pin -> FilePath
-pinPath p = basePath <> "/gpio" <> pinNumT p
+pinPath pin = basePath <> "/gpio" <> toPath pin
 
 valuePath :: Pin -> FilePath
-valuePath p = pinPath p <> "/value"
+valuePath pin = pinPath pin <> "/value"
 
 directionPath :: Pin -> FilePath
-directionPath p = pinPath p <> "/direction"
+directionPath pin = pinPath pin <> "/direction"
