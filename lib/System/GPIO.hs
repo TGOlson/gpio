@@ -3,7 +3,7 @@ module System.GPIO
     ( Pin(..)
     , ActivePin
     , Value(..)
-    , Direction(..)
+    , Direction
 
     -- Exported API
     , initReaderPin
@@ -19,21 +19,31 @@ import Control.Exception      (SomeException (..))
 import Control.Monad
 import Control.Monad.Catch
 import Control.Monad.IO.Class
-import Data.Monoid            ((<>))
 import System.Directory
 
+import System.GPIO.Path
 import System.GPIO.Types
 
 
+data PinException
+    = InitPinException Pin String
+    | SetDirectionException Pin Direction String
+    | ReadPinException Pin String
+    | WritePinException Pin Value String
+    | ReattachPinException Pin String
+    | ClosePinException Pin String
+  deriving (Show)
+
+instance Exception PinException
+
+
 initReaderPin :: (MonadCatch m, MonadIO m) => Pin -> m (ActivePin 'In)
-initReaderPin pin = let activePin = ReaderPin pin
-    in initPin activePin >> return activePin
+initReaderPin = initPin . ReaderPin
 
 initWriterPin :: (MonadCatch m, MonadIO m) => Pin -> m (ActivePin 'Out)
-initWriterPin pin = let activePin = WriterPin pin
-    in initPin activePin >> return activePin
+initWriterPin = initPin . WriterPin
 
-initPin :: (MonadCatch m, MonadIO m) => ActivePin a -> m ()
+initPin :: (MonadCatch m, MonadIO m) => ActivePin a -> m (ActivePin a)
 initPin pin = do
     withVerboseError (InitPinException (unpin pin)) $
         writeFileM exportPath (toData $ unpin pin)
@@ -41,6 +51,7 @@ initPin pin = do
     withVerboseError (SetDirectionException (unpin pin) (direction pin)) $
         writeFileM (directionPath $ unpin pin) (toData (direction pin))
 
+    return pin
 
 readPin :: (MonadCatch m, MonadIO m) => ActivePin a -> m Value
 readPin pin = do
@@ -63,6 +74,7 @@ readPin pin = do
 writePin :: (MonadCatch m, MonadIO m) => Value -> ActivePin 'Out -> m ()
 writePin value pin = withVerboseError (WritePinException (unpin pin) value)
     $ writeFileM (valuePath $ unpin pin) (toData value)
+
 
 -- Get an active pin from a pin, preserving the invariants required when a pin is initialized.
 -- Useful for CLI type commands where pointers to an active pin can be lost between calls.
@@ -91,21 +103,6 @@ closePin :: (MonadCatch m, MonadIO m) => ActivePin a -> m ()
 closePin pin = withVerboseError (ClosePinException (unpin pin))
     $ writeFileM unexportPath (toData $ unpin pin)
 
--- Internal --------------------------------------------------------------------------------------------------
-
-data PinException
-    = InitPinException Pin String
-    | SetDirectionException Pin Direction String
-    | ReadPinException Pin String
-    | WritePinException Pin Value String
-    | ReattachPinException Pin String
-    | ClosePinException Pin String
-  deriving (Show)
-
-instance Exception PinException
-
-
-
 
 withVerboseError :: MonadCatch m => (String -> PinException) -> m () -> m ()
 withVerboseError pinException = handle $ \(e :: SomeException) -> throwM $ pinException (show e)
@@ -115,23 +112,3 @@ writeFileM fp = liftIO . writeFile fp
 
 readFileM :: MonadIO m => FilePath -> m String
 readFileM = liftIO . readFile
-
--- Path Utils ------------------------------------------------------------------------------------------------
-
-basePath :: FilePath
-basePath = "/sys/class/gpio"
-
-exportPath :: FilePath
-exportPath = basePath <> "/export"
-
-unexportPath :: FilePath
-unexportPath = basePath <> "/unexport"
-
-pinPath :: Pin -> FilePath
-pinPath pin = basePath <> "/gpio" <> toPath pin
-
-valuePath :: Pin -> FilePath
-valuePath pin = pinPath pin <> "/value"
-
-directionPath :: Pin -> FilePath
-directionPath pin = pinPath pin <> "/direction"
