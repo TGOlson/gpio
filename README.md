@@ -12,4 +12,3 @@ TODO:
   * Support edges
   * Look into GPIO supported file watching
   * Add all pin numbers
-  * Decide on a pin mapping strategy.

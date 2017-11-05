@@ -53,6 +53,7 @@ initPin pin = do
 
     return pin
 
+
 readPin :: (MonadCatch m, MonadIO m) => ActivePin a -> m Value
 readPin pin = do
     x <- readFileM $ valuePath (unpin pin)
