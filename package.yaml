@@ -1,5 +1,5 @@
 name:                gpio
-version:             0.1.0.2
+version:             0.1.0.3
 synopsis:            Haskell GPIO interface, designed specifically for the RaspberryPi.
 description:         Please see README.md
 homepage:            http://github.com/tgolson/gpio
