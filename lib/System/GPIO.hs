@@ -1,6 +1,7 @@
 module System.GPIO
     -- Re-exported types
     ( Pin(..)
+    , fromInt
     , ActivePin
     , Value(..)
     , Direction

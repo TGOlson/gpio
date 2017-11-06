@@ -2,7 +2,6 @@ module Main (main) where
 
 import Control.Monad
 import Options.Generic
-import Safe
 
 import System.GPIO
 
@@ -35,10 +34,11 @@ main = getRecord "GPIO" >>= \case
   where
     getPin = throwLeft . parsePin
 
-    parsePin :: Int -> Either String Pin
-    parsePin x = case readMay ("P" ++ show x) of
-        Nothing -> Left ("Usage error: could not parse pin value from integer: " ++ show x)
-        Just p  -> Right p
 
-    throwLeft :: Either String a -> a
-    throwLeft = either error id
+parsePin :: Int -> Either String Pin
+parsePin x = case fromInt x of
+    Nothing -> Left ("Usage error: could not parse pin value from integer: " ++ show x)
+    Just p  -> Right p
+
+throwLeft :: Either String a -> a
+throwLeft = either error id
