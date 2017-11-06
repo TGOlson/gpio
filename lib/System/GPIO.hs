@@ -19,6 +19,8 @@ import Control.Exception      (SomeException (..))
 import Control.Monad
 import Control.Monad.Catch
 import Control.Monad.IO.Class
+import Data.Maybe
+import Safe
 import System.Directory
 
 import System.GPIO.Path
@@ -56,20 +58,11 @@ initPin pin = do
 
 readPin :: (MonadCatch m, MonadIO m) => ActivePin a -> m Value
 readPin pin = do
-    x <- readFileM $ valuePath (unpin pin)
+    x <- readFirstLine $ valuePath (unpin pin)
 
-    -- TODO: handle errors after cleaning this up...
-    case fromData (runLineHack x) of
+    case fromData x of
         Right v -> return v
         Left e  -> throwM $ ReadPinException (unpin pin) e
-  where
-    -- Note: too lazy to properly handle new lines in the value files
-    -- it looks like the gpio interface appends newlines
-    -- so file is read as "1\n"
-    -- TODO: handle correctly, maybe use hGetChar or something...
-    runLineHack t = case lines t of
-        []    -> error "Error: runLineHack failed us."
-        (x:_) -> x
 
 
 writePin :: (MonadCatch m, MonadIO m) => Value -> ActivePin 'Out -> m ()
@@ -92,7 +85,7 @@ reattachToPin pin = do
     exists <- liftIO $ doesFileExist (directionPath (unpin pin))
     unless exists $ throwM (err "Pin was never initialized")
 
-    v <- fromData <$> readFileM (directionPath (unpin pin))
+    v <- fromData <$> readFirstLine (directionPath (unpin pin))
     dir <- either (throwM . err) return v
 
     unless (dir == direction pin) $ throwM (err "Attempting to reattach to pin in wrong direction")
@@ -113,3 +106,6 @@ writeFileM fp = liftIO . writeFile fp
 
 readFileM :: MonadIO m => FilePath -> m String
 readFileM = liftIO . readFile
+
+readFirstLine :: MonadIO m => FilePath -> m String
+readFirstLine = fmap (fromMaybe mempty . headMay . lines) . readFileM

@@ -8,8 +8,8 @@ import System.GPIO
 
 data Command
     = Init Int String
-    | Read Int
-    | Write Int Int
+    | Read Int String
+    | Write Int String
     | Close Int String
   deriving (Generic, Show)
 
@@ -21,11 +21,13 @@ main = getRecord "GPIO" >>= \case
     Init x "out"  -> void (initWriterPin (getPin x))
     Init _ _      -> error "Usage error: use 'in' or 'out' for export direction."
 
-    Read x        -> reattachToReaderPin (getPin x) >>= readPin >>= print
+    Read x "in"   -> reattachToReaderPin (getPin x) >>= readPin >>= print
+    Read x "out"  -> reattachToWriterPin (getPin x) >>= readPin >>= print
+    Read _ _      -> error "Usage error: use 'in' or 'out' for export direction."
 
-    Write x 1     -> reattachToWriterPin (getPin x) >>= writePin HI
-    Write x 0     -> reattachToWriterPin (getPin x) >>= writePin LO
-    Write _ _     -> error "Usage error: use 1 or 0 for write value."
+    Write x "hi"  -> reattachToWriterPin (getPin x) >>= writePin HI
+    Write x "lo"  -> reattachToWriterPin (getPin x) >>= writePin LO
+    Write _ _     -> error "Usage error: use 'hi' or 'lo' for write value."
 
     Close x "in"  -> reattachToReaderPin (getPin x) >>= closePin
     Close x "out" -> reattachToWriterPin (getPin x) >>= closePin
